@@ -2,7 +2,10 @@
 __pycache__/
 *.py[codz]
 *$py.class
-
+.idea/
+yolo_dataset/
+fine_tuning_set/
+ROADMAPS.md
 # C extensions
 *.so
 
