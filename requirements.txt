@@ -14,3 +14,10 @@ torch
 torchvision
 scikit-learn
 matplotlib~=3.8.0
+pillow>=10.0.0
+numpy>=1.24.0
+requests>=2.31.0
+scipy>=1.10.0
+
+# Optional: for background textures
+kaggle>=1.5.16

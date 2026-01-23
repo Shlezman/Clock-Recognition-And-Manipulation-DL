@@ -1,8 +1,10 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import io
+from PIL import Image
 
 
-def draw_analog_clock(hh, mm, save_path=None):
+def draw_analog_clock(hh, mm, save_path=None, return_array=False):
     """
     Draw a minimalist analog clock showing the time hh:mm
 
@@ -10,6 +12,10 @@ def draw_analog_clock(hh, mm, save_path=None):
     hh (int or str): Hours (0-23), can be in format '0X' like '09'
     mm (int or str): Minutes (0-59), can be in format '0X' like '05'
     save_path (str, optional): Path to save the image. If None, just displays the clock.
+    return_array (bool): If True, returns numpy array instead of displaying
+
+    Returns:
+    numpy.ndarray if return_array=True, else None
     """
     # Convert to integers if strings are provided
     hh = int(hh)
@@ -47,6 +53,18 @@ def draw_analog_clock(hh, mm, save_path=None):
             'k-', linewidth=10)
 
     plt.tight_layout()
+
+    # Return as array if requested
+    if return_array:
+        # Draw to buffer
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=100,
+                    bbox_inches='tight', facecolor='white')
+        buf.seek(0)
+        img = Image.open(buf)
+        img_array = np.array(img)
+        plt.close()
+        return img_array
 
     # Save or show
     if save_path:
