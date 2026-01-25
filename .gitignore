@@ -6,6 +6,7 @@ __pycache__/
 yolo_dataset/
 fine_tuning_set/
 ROADMAPS.md
+.DS_Store
 # C extensions
 *.so
 
