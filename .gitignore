@@ -9,6 +9,8 @@ ROADMAPS.md
 .DS_Store
 # C extensions
 *.so
+data/
+ignore/
 
 # Distribution / packaging
 .Python
