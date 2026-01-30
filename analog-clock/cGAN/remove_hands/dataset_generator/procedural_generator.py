@@ -1,6 +1,7 @@
 # ==============================================================================
 # FILE: procedural_generator.py
-# Handles automatic asset downloading and procedural generation (Rich Hand Styles)
+# Handles automatic asset downloading and procedural generation
+# Fixed: Removed 'mercedes' style to prevent >3 hands artifact
 # ==============================================================================
 
 import cv2
@@ -96,9 +97,15 @@ class ProceduralClockGenerator:
 
         d = radius * 2
 
+        # Decide Face Type (Solid or Texture)
         if random.random() < Config.SOLID_FACE_PROB:
             face_tex = np.zeros((d, d, 3), dtype=np.uint8)
-            color = (random.randint(40, 240), random.randint(40, 240), random.randint(40, 240))
+            # Logic for White Faces (approx 70% of solid faces -> 35% total)
+            if random.random() < 0.70:
+                val = random.randint(235, 255)
+                color = (val, val, val)
+            else:
+                color = (random.randint(40, 240), random.randint(40, 240), random.randint(40, 240))
             face_tex[:] = color
         else:
             face_tex = cv2.imread(str(face_path))
@@ -204,14 +211,17 @@ class ProceduralClockGenerator:
                 cv2.putText(img, text, (x, y), font, font_scale, color, thickness, cv2.LINE_AA)
 
     def generate_hand_set(self, center: tuple, radius: int, scene_size: tuple):
-        """Generates hands layer matching the scene size with RICH variety"""
+        """Generates hands layer including optional SECOND HAND"""
+
         color = random.choice(self.hand_colors)
+
+        # REMOVED 'mercedes' and 'snowflake' to avoid the "6-hands" artifact
         style = random.choice([
             'pointed', 'rectangle', 'modern', 'arrow', 'diamond',
             'tapered', 'sword', 'lollipop', 'skeleton', 'baton',
             'leaf', 'pencil', 'dauphine', 'breguet', 'spade',
-            'anchor', 'cathedral', 'alpha', 'mercedes', 'snowflake',
-            'feuille', 'lance', 'plongeur', 'syringe', 'flamme'
+            'anchor', 'cathedral', 'alpha', 'feuille', 'lance',
+            'plongeur', 'syringe', 'flamme'
         ])
 
         min_len_ratio = random.uniform(0.75, 0.95)
@@ -226,7 +236,37 @@ class ProceduralClockGenerator:
         hour_hand = self._draw_single_hand(center, hour_length, hour_width, color, style, scene_size)
         minute_hand = self._draw_single_hand(center, minute_length, minute_width, color, style, scene_size)
 
-        return hour_hand, minute_hand
+        # --- Second Hand (50% Probability) ---
+        second_hand = None
+        if random.random() < Config.INCLUDE_SECOND_HAND_PROB:
+            sec_colors = [(0, 0, 200), (0, 0, 0), (200, 0, 0)]  # Red/Black/Blue
+            sec_color = random.choice(sec_colors)
+            sec_length = radius * random.uniform(0.8, 0.95)
+            sec_width = max(1, int(radius * 0.015))
+
+            second_hand = self._draw_second_hand(center, sec_length, sec_width, sec_color, scene_size)
+
+        # Must return 3 values!
+        return hour_hand, minute_hand, second_hand
+
+    def _draw_second_hand(self, center, length, width, color, scene_size):
+        w, h = scene_size
+        img = np.zeros((h, w, 4), dtype=np.uint8)
+        cx, cy = center
+        length = int(length)
+        tail_length = int(length * 0.2)
+
+        pts = np.array([
+            [cx - width // 2, cy + tail_length],
+            [cx - width // 2, cy - length],
+            [cx + width // 2, cy - length],
+            [cx + width // 2, cy + tail_length]
+        ], dtype=np.int32)
+
+        cv2.fillPoly(img, [pts], list(color) + [255], cv2.LINE_AA)
+        cv2.circle(img, center, int(width * 3), list(color) + [255], -1, cv2.LINE_AA)
+
+        return img
 
     def _draw_single_hand(self, center, length, width, color, style, scene_size):
         w, h = scene_size
@@ -237,278 +277,122 @@ class ProceduralClockGenerator:
 
         if style == 'pointed':
             pts = np.array([[cx, cy - length], [cx + width, cy], [cx, cy + width], [cx - width, cy]], dtype=np.int32)
-
         elif style == 'arrow':
             arrow_head = int(width * 2)
-            pts = np.array([
-                [cx, cy - length],
-                [cx + arrow_head, cy - length + arrow_head],
-                [cx + width // 2, cy - length + arrow_head],
-                [cx + width // 2, cy],
-                [cx - width // 2, cy],
-                [cx - width // 2, cy - length + arrow_head],
-                [cx - arrow_head, cy - length + arrow_head]
-            ], dtype=np.int32)
-
+            pts = np.array([[cx, cy - length], [cx + arrow_head, cy - length + arrow_head],
+                            [cx + width // 2, cy - length + arrow_head], [cx + width // 2, cy], [cx - width // 2, cy],
+                            [cx - width // 2, cy - length + arrow_head], [cx - arrow_head, cy - length + arrow_head]],
+                           dtype=np.int32)
         elif style == 'diamond':
             diamond_size = int(width * 1.5)
-            pts = np.array([
-                [cx, cy - length],
-                [cx + diamond_size, cy - length + diamond_size],
-                [cx + width // 2, cy - length + diamond_size * 2],
-                [cx + width // 2, cy],
-                [cx - width // 2, cy],
-                [cx - width // 2, cy - length + diamond_size * 2],
-                [cx - diamond_size, cy - length + diamond_size]
-            ], dtype=np.int32)
-
+            pts = np.array([[cx, cy - length], [cx + diamond_size, cy - length + diamond_size],
+                            [cx + width // 2, cy - length + diamond_size * 2], [cx + width // 2, cy],
+                            [cx - width // 2, cy], [cx - width // 2, cy - length + diamond_size * 2],
+                            [cx - diamond_size, cy - length + diamond_size]], dtype=np.int32)
         elif style == 'tapered':
-            pts = np.array([
-                [cx, cy - length],
-                [cx + width // 4, int(cy - length * 0.7)],
-                [cx + width // 2, cy],
-                [cx - width // 2, cy],
-                [cx - width // 4, int(cy - length * 0.7)]
-            ], dtype=np.int32)
-
+            pts = np.array([[cx, cy - length], [cx + width // 4, int(cy - length * 0.7)], [cx + width // 2, cy],
+                            [cx - width // 2, cy], [cx - width // 4, int(cy - length * 0.7)]], dtype=np.int32)
         elif style == 'sword':
             blade_width = width // 3
-            pts = np.array([
-                [cx, cy - length],
-                [cx + blade_width, int(cy - length * 0.85)],
-                [cx + width // 2, int(cy - length * 0.85)],
-                [cx + width // 2, cy],
-                [cx - width // 2, cy],
-                [cx - width // 2, int(cy - length * 0.85)],
-                [cx - blade_width, int(cy - length * 0.85)]
-            ], dtype=np.int32)
-
+            pts = np.array([[cx, cy - length], [cx + blade_width, int(cy - length * 0.85)],
+                            [cx + width // 2, int(cy - length * 0.85)], [cx + width // 2, cy], [cx - width // 2, cy],
+                            [cx - width // 2, int(cy - length * 0.85)], [cx - blade_width, int(cy - length * 0.85)]],
+                           dtype=np.int32)
         elif style == 'lollipop':
-            pts = np.array([
-                [cx - width // 2, cy],
-                [cx - width // 2, cy - length + width * 2],
-                [cx + width // 2, cy - length + width * 2],
-                [cx + width // 2, cy]
-            ], dtype=np.int32)
+            pts = np.array([[cx - width // 2, cy], [cx - width // 2, cy - length + width * 2],
+                            [cx + width // 2, cy - length + width * 2], [cx + width // 2, cy]], dtype=np.int32)
             cv2.fillPoly(img, [pts], list(color) + [255], cv2.LINE_AA)
             cv2.circle(img, (cx, cy - length + width), width, list(color) + [255], -1, cv2.LINE_AA)
             return img
-
         elif style == 'skeleton':
-            outer_pts = np.array([
-                [cx - width // 2, cy],
-                [cx - width // 2, cy - length],
-                [cx + width // 2, cy - length],
-                [cx + width // 2, cy]
-            ], dtype=np.int32)
+            outer_pts = np.array([[cx - width // 2, cy], [cx - width // 2, cy - length], [cx + width // 2, cy - length],
+                                  [cx + width // 2, cy]], dtype=np.int32)
             inner_width = width // 3
-            inner_pts = np.array([
-                [cx - inner_width // 2, cy - width],
-                [cx - inner_width // 2, cy - length + width],
-                [cx + inner_width // 2, cy - length + width],
-                [cx + inner_width // 2, cy - width]
-            ], dtype=np.int32)
+            inner_pts = np.array([[cx - inner_width // 2, cy - width], [cx - inner_width // 2, cy - length + width],
+                                  [cx + inner_width // 2, cy - length + width], [cx + inner_width // 2, cy - width]],
+                                 dtype=np.int32)
             cv2.fillPoly(img, [outer_pts], list(color) + [255], cv2.LINE_AA)
             cv2.fillPoly(img, [inner_pts], [0, 0, 0, 0], cv2.LINE_AA)
             return img
-
         elif style == 'baton':
-            pts = np.array([
-                [cx - width // 3, cy],
-                [cx - width // 3, cy - length],
-                [cx + width // 3, cy - length],
-                [cx + width // 3, cy]
-            ], dtype=np.int32)
-
+            pts = np.array([[cx - width // 3, cy], [cx - width // 3, cy - length], [cx + width // 3, cy - length],
+                            [cx + width // 3, cy]], dtype=np.int32)
         elif style == 'leaf':
-            pts = np.array([
-                [cx, cy - length],
-                [cx + width, int(cy - length * 0.6)],
-                [cx + width // 2, cy],
-                [cx - width // 2, cy],
-                [cx - width, int(cy - length * 0.6)]
-            ], dtype=np.int32)
-
+            pts = np.array(
+                [[cx, cy - length], [cx + width, int(cy - length * 0.6)], [cx + width // 2, cy], [cx - width // 2, cy],
+                 [cx - width, int(cy - length * 0.6)]], dtype=np.int32)
         elif style == 'pencil':
-            pts = np.array([
-                [cx, cy - length],
-                [cx + width // 3, int(cy - length * 0.9)],
-                [cx + width // 2, cy],
-                [cx - width // 2, cy],
-                [cx - width // 3, int(cy - length * 0.9)]
-            ], dtype=np.int32)
-
+            pts = np.array([[cx, cy - length], [cx + width // 3, int(cy - length * 0.9)], [cx + width // 2, cy],
+                            [cx - width // 2, cy], [cx - width // 3, int(cy - length * 0.9)]], dtype=np.int32)
         elif style == 'dauphine':
-            pts = np.array([
-                [cx, cy - length],
-                [cx + width // 3, int(cy - length * 0.7)],
-                [cx + width, int(cy - length * 0.5)],
-                [cx + width // 2, cy],
-                [cx - width // 2, cy],
-                [cx - width, int(cy - length * 0.5)],
-                [cx - width // 3, int(cy - length * 0.7)]
-            ], dtype=np.int32)
-
+            pts = np.array(
+                [[cx, cy - length], [cx + width // 3, int(cy - length * 0.7)], [cx + width, int(cy - length * 0.5)],
+                 [cx + width // 2, cy], [cx - width // 2, cy], [cx - width, int(cy - length * 0.5)],
+                 [cx - width // 3, int(cy - length * 0.7)]], dtype=np.int32)
         elif style == 'breguet':
-            pts = np.array([
-                [cx - width // 2, cy],
-                [cx - width // 2, cy - length],
-                [cx + width // 2, cy - length],
-                [cx + width // 2, cy]
-            ], dtype=np.int32)
+            pts = np.array([[cx - width // 2, cy], [cx - width // 2, cy - length], [cx + width // 2, cy - length],
+                            [cx + width // 2, cy]], dtype=np.int32)
             cv2.fillPoly(img, [pts], list(color) + [255], cv2.LINE_AA)
             hole_radius = int(width * 0.8)
             hole_y = cy - int(length * 0.75)
             cv2.circle(img, (cx, hole_y), hole_radius, [0, 0, 0, 0], -1, cv2.LINE_AA)
             return img
-
         elif style == 'spade':
             spade_width = int(width * 1.8)
-            pts = np.array([
-                [cx, cy - length],
-                [cx + spade_width, int(cy - length * 0.8)],
-                [int(cx + spade_width * 0.7), int(cy - length * 0.65)],
-                [cx + width // 2, int(cy - length * 0.7)],
-                [cx + width // 2, cy],
-                [cx - width // 2, cy],
-                [cx - width // 2, int(cy - length * 0.7)],
-                [int(cx - spade_width * 0.7), int(cy - length * 0.65)],
-                [cx - spade_width, int(cy - length * 0.8)]
-            ], dtype=np.int32)
-
+            pts = np.array([[cx, cy - length], [cx + spade_width, int(cy - length * 0.8)],
+                            [int(cx + spade_width * 0.7), int(cy - length * 0.65)],
+                            [cx + width // 2, int(cy - length * 0.7)], [cx + width // 2, cy], [cx - width // 2, cy],
+                            [cx - width // 2, int(cy - length * 0.7)],
+                            [int(cx - spade_width * 0.7), int(cy - length * 0.65)],
+                            [cx - spade_width, int(cy - length * 0.8)]], dtype=np.int32)
         elif style == 'anchor':
-            pts = np.array([
-                [cx - width // 3, cy],
-                [cx - width // 3, int(cy - length * 0.85)],
-                [int(cx - width * 1.5), int(cy - length * 0.85)],
-                [int(cx - width * 1.5), int(cy - length * 0.7)],
-                [cx - width // 3, int(cy - length * 0.7)],
-                [cx - width // 3, cy - length],
-                [cx + width // 3, cy - length],
-                [cx + width // 3, int(cy - length * 0.7)],
-                [int(cx + width * 1.5), int(cy - length * 0.7)],
-                [int(cx + width * 1.5), int(cy - length * 0.85)],
-                [cx + width // 3, int(cy - length * 0.85)],
-                [cx + width // 3, cy]
-            ], dtype=np.int32)
-
+            pts = np.array([[cx - width // 3, cy], [cx - width // 3, int(cy - length * 0.85)],
+                            [int(cx - width * 1.5), int(cy - length * 0.85)],
+                            [int(cx - width * 1.5), int(cy - length * 0.7)], [cx - width // 3, int(cy - length * 0.7)],
+                            [cx - width // 3, cy - length], [cx + width // 3, cy - length],
+                            [cx + width // 3, int(cy - length * 0.7)], [int(cx + width * 1.5), int(cy - length * 0.7)],
+                            [int(cx + width * 1.5), int(cy - length * 0.85)],
+                            [cx + width // 3, int(cy - length * 0.85)], [cx + width // 3, cy]], dtype=np.int32)
         elif style == 'cathedral':
-            pts = np.array([
-                [cx, cy - length],
-                [cx + width // 4, int(cy - length * 0.92)],
-                [int(cx + width * 0.6), int(cy - length * 0.8)],
-                [cx + width // 2, int(cy - length * 0.65)],
-                [cx + width // 2, cy],
-                [cx - width // 2, cy],
-                [cx - width // 2, int(cy - length * 0.65)],
-                [int(cx - width * 0.6), int(cy - length * 0.8)],
-                [cx - width // 4, int(cy - length * 0.92)]
-            ], dtype=np.int32)
-
+            pts = np.array([[cx, cy - length], [cx + width // 4, int(cy - length * 0.92)],
+                            [int(cx + width * 0.6), int(cy - length * 0.8)], [cx + width // 2, int(cy - length * 0.65)],
+                            [cx + width // 2, cy], [cx - width // 2, cy], [cx - width // 2, int(cy - length * 0.65)],
+                            [int(cx - width * 0.6), int(cy - length * 0.8)],
+                            [cx - width // 4, int(cy - length * 0.92)]], dtype=np.int32)
         elif style == 'alpha':
-            pts = np.array([
-                [cx, cy - length],
-                [int(cx + width * 1.5), int(cy - length * 0.6)],
-                [cx + width // 2, cy],
-                [cx - width // 2, cy],
-                [int(cx - width * 1.5), int(cy - length * 0.6)]
-            ], dtype=np.int32)
-
-        elif style == 'mercedes':
-            line_width = max(2, width // 4)
-            cv2.line(img, (cx, cy), (cx, cy - length), list(color) + [255], line_width, cv2.LINE_AA)
-            left_x = int(cx - length * 0.866)
-            left_y = int(cy + length * 0.5)
-            cv2.line(img, (cx, cy), (left_x, left_y), list(color) + [255], line_width, cv2.LINE_AA)
-            right_x = int(cx + length * 0.866)
-            right_y = int(cy + length * 0.5)
-            cv2.line(img, (cx, cy), (right_x, right_y), list(color) + [255], line_width, cv2.LINE_AA)
-            return img
-
-        elif style == 'snowflake':
-            pts = np.array([
-                [cx, cy - length],
-                [int(cx + width * 0.4), int(cy - length * 0.85)],
-                [cx + width // 4, int(cy - length * 0.7)],
-                [cx + width, int(cy - length * 0.6)],
-                [cx + width // 2, int(cy - length * 0.5)],
-                [cx + width // 2, cy],
-                [cx - width // 2, cy],
-                [cx - width // 2, int(cy - length * 0.5)],
-                [cx - width, int(cy - length * 0.6)],
-                [cx - width // 4, int(cy - length * 0.7)],
-                [int(cx - width * 0.4), int(cy - length * 0.85)]
-            ], dtype=np.int32)
-
+            pts = np.array([[cx, cy - length], [int(cx + width * 1.5), int(cy - length * 0.6)], [cx + width // 2, cy],
+                            [cx - width // 2, cy], [int(cx - width * 1.5), int(cy - length * 0.6)]], dtype=np.int32)
         elif style == 'feuille':
-            pts = np.array([
-                [cx, cy - length],
-                [int(cx + width * 0.8), int(cy - length * 0.5)],
-                [cx + width // 3, cy],
-                [cx - width // 3, cy],
-                [int(cx - width * 0.8), int(cy - length * 0.5)]
-            ], dtype=np.int32)
-
+            pts = np.array([[cx, cy - length], [int(cx + width * 0.8), int(cy - length * 0.5)], [cx + width // 3, cy],
+                            [cx - width // 3, cy], [int(cx - width * 0.8), int(cy - length * 0.5)]], dtype=np.int32)
         elif style == 'lance':
-            pts = np.array([
-                [cx, cy - length],
-                [int(cx + width * 0.6), int(cy - length * 0.9)],
-                [cx + width // 4, int(cy - length * 0.8)],
-                [cx + width // 4, cy],
-                [cx - width // 4, cy],
-                [cx - width // 4, int(cy - length * 0.8)],
-                [int(cx - width * 0.6), int(cy - length * 0.9)]
-            ], dtype=np.int32)
-
+            pts = np.array([[cx, cy - length], [int(cx + width * 0.6), int(cy - length * 0.9)],
+                            [cx + width // 4, int(cy - length * 0.8)], [cx + width // 4, cy], [cx - width // 4, cy],
+                            [cx - width // 4, int(cy - length * 0.8)], [int(cx - width * 0.6), int(cy - length * 0.9)]],
+                           dtype=np.int32)
         elif style == 'plongeur':
-            pts = np.array([
-                [int(cx - width * 0.7), cy],
-                [int(cx - width * 0.7), int(cy - length * 0.9)],
-                [cx, cy - length],
-                [int(cx + width * 0.7), int(cy - length * 0.9)],
-                [int(cx + width * 0.7), cy]
-            ], dtype=np.int32)
-
+            pts = np.array(
+                [[int(cx - width * 0.7), cy], [int(cx - width * 0.7), int(cy - length * 0.9)], [cx, cy - length],
+                 [int(cx + width * 0.7), int(cy - length * 0.9)], [int(cx + width * 0.7), cy]], dtype=np.int32)
         elif style == 'syringe':
             tip_width = width // 4
-            pts = np.array([
-                [cx, cy - length],
-                [cx + tip_width, int(cy - length * 0.95)],
-                [cx + width // 2, int(cy - length * 0.9)],
-                [cx + width // 2, cy],
-                [cx - width // 2, cy],
-                [cx - width // 2, int(cy - length * 0.9)],
-                [cx - tip_width, int(cy - length * 0.95)]
-            ], dtype=np.int32)
-
+            pts = np.array([[cx, cy - length], [cx + tip_width, int(cy - length * 0.95)],
+                            [cx + width // 2, int(cy - length * 0.9)], [cx + width // 2, cy], [cx - width // 2, cy],
+                            [cx - width // 2, int(cy - length * 0.9)], [cx - tip_width, int(cy - length * 0.95)]],
+                           dtype=np.int32)
         elif style == 'flamme':
-            pts = np.array([
-                [cx, cy - length],
-                [int(cx + width * 0.3), int(cy - length * 0.9)],
-                [int(cx + width * 0.7), int(cy - length * 0.7)],
-                [int(cx + width * 0.5), int(cy - length * 0.5)],
-                [cx + width // 2, cy],
-                [cx - width // 2, cy],
-                [int(cx - width * 0.5), int(cy - length * 0.5)],
-                [int(cx - width * 0.7), int(cy - length * 0.7)],
-                [int(cx - width * 0.3), int(cy - length * 0.9)]
-            ], dtype=np.int32)
-
+            pts = np.array([[cx, cy - length], [int(cx + width * 0.3), int(cy - length * 0.9)],
+                            [int(cx + width * 0.7), int(cy - length * 0.7)],
+                            [int(cx + width * 0.5), int(cy - length * 0.5)], [cx + width // 2, cy],
+                            [cx - width // 2, cy], [int(cx - width * 0.5), int(cy - length * 0.5)],
+                            [int(cx - width * 0.7), int(cy - length * 0.7)],
+                            [int(cx - width * 0.3), int(cy - length * 0.9)]], dtype=np.int32)
         elif style == 'modern':
-            pts = np.array([
-                [cx - width // 2, cy],
-                [cx - width // 2, cy - length],
-                [cx + width // 2, cy - length],
-                [cx + width // 2, cy]
-            ], dtype=np.int32)
-
+            pts = np.array([[cx - width // 2, cy], [cx - width // 2, cy - length], [cx + width // 2, cy - length],
+                            [cx + width // 2, cy]], dtype=np.int32)
         else:  # Default
-            pts = np.array([
-                [cx - width // 2, cy],
-                [cx - width // 2, cy - length],
-                [cx + width // 2, cy - length],
-                [cx + width // 2, cy]
-            ], dtype=np.int32)
+            pts = np.array([[cx - width // 2, cy], [cx - width // 2, cy - length], [cx + width // 2, cy - length],
+                            [cx + width // 2, cy]], dtype=np.int32)
 
         cv2.fillPoly(img, [pts], list(color) + [255], cv2.LINE_AA)
         return img

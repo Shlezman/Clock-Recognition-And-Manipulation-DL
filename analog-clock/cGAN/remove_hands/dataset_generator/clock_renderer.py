@@ -34,11 +34,15 @@ class ClockRenderer:
         result = (overlay_rgb * alpha + background_rgb * (1 - alpha)).astype(np.uint8)
         return result
 
-    def composite_hands(self, background: np.ndarray, hour_hand_img: np.ndarray,
-                        minute_hand_img: np.ndarray, hour: int, minute: int,
-                        center: Tuple[int, int] = None) -> np.ndarray:
+    def composite_hands(self, background: np.ndarray,
+                        hour_hand_img: np.ndarray,
+                        minute_hand_img: np.ndarray,
+                        hour: int, minute: int,
+                        center: Tuple[int, int] = None,
+                        second_hand_img: np.ndarray = None,
+                        second: int = 0) -> np.ndarray:
         """
-        Composite hands. IMPORTANT: 'center' must be the pivot point.
+        Composite hands. Supports Hour, Minute AND optional Second hand.
         """
         if center is None:
             h, w = background.shape[:2]
@@ -55,6 +59,12 @@ class ClockRenderer:
         angle_m = minute * 6
         rot_m = self.rotate_hand(minute_hand_img, angle_m, center)
         result = self.overlay_image(result, rot_m)
+
+        # Second Hand (Optional)
+        if second_hand_img is not None:
+            angle_s = second * 6
+            rot_s = self.rotate_hand(second_hand_img, angle_s, center)
+            result = self.overlay_image(result, rot_s)
 
         # Center Pin
         cv2.circle(result, center, 4, (20, 20, 20), -1, cv2.LINE_AA)
