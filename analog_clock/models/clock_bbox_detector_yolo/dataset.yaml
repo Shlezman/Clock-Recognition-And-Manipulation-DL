@@ -1,8 +1,5 @@
-path: analog_clock/models/hands_removal_cgan/dataset_generator/dataset/yolo_seg
+path: analog_clock/models/clock_bbox_detector_yolo/dataset
 train: images/train
 val: images/val
-nc: 3
-names:
-  0: hour_hand
-  1: minute_hand
-  2: second_hand
+nc: 1
+names: ['clock']
