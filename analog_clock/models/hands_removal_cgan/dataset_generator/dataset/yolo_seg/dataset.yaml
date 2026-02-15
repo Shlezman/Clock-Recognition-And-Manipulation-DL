@@ -1,0 +1,6 @@
+
+path: analog_clock/models/hands_removal_cgan/dataset_generator/dataset/yolo_seg
+train: images/train
+val: images/val
+nc: 3
+names: ['hour_hand', 'minute_hand', 'second_hand']
