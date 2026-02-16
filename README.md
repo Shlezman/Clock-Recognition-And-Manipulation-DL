@@ -1,7 +1,3 @@
-Here is the detailed **README.md** file, translated to English and formatted professionally for GitHub.
-
----
-
 # 🕰️ TimeSync: Digital-to-Analog Clock Synchronization
 
 > **An End-to-End Deep Learning Pipeline: From Digital Time Recognition to Generative Analog Clock Manipulation.**
