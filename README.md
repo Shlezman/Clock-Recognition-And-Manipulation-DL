@@ -86,6 +86,91 @@ The project utilizes a hybrid of public benchmarks and custom synthetic data:
 * **Synthetic Analog Clocks:** Pairs of `(Image, Sketch)` and `(Image, Mask)` generated to train the cGAN and Inpainting models.
 
 ---
+```mathematica
+┌──────────────────────┐
+│  Digital Clock Image │
+└─────────────┬────────┘
+              │
+              ▼
+┌────────────────────────────────────┐
+│ Time Region Detection Model        │
+│ (Bounding Box Localization)        │
+└─────────────┬──────────────────────┘
+              │
+              ▼
+┌────────────────────────────────────┐
+│ Digit Recognition Model            │
+└─────────────┬──────────────────────┘
+              │
+              ▼
+┌──────────────────────┐
+│ Extracted Time HH:MM │
+└─────────────┬────────┘
+              │
+              │
+              │
+      ┌───────┴─────────────── Y-SPLIT ─────────────────┐
+      ▼                                                 ▼
+
+PATH 1: Analog Generation & Alignment           PATH 2: Hand Editing Pipeline
+
+┌────────────────────────────────────┐         ┌──────────────────────────────┐
+│ Function: Generate Minimal         │         │ Analog Clock Image (Input)   │
+│     Analog Sketch                  │         └──────────────┬───────────────┘
+└─────────────┬──────────────────────┘                        │
+              │                                               ▼
+              ▼                                ┌──────────────────────────────┐
+┌────────────────────────────────────┐         │ Hand Detection Model         │
+│         cGAN Model                 │         └──────────────┬───────────────┘
+└─────────────┬──────────────────────┘                        │
+              │                                               ▼
+              ▼                                ┌──────────────────────────────┐
+┌────────────────────────────────────┐         │ Hand Removal Model           │
+│ Adjusted Analog Clock Image        │         └──────────────┬───────────────┘
+└────────────────────────────────────┘                        │
+                                                              ▼
+                                                ┌──────────────────────────────┐
+                                                │ Function: Reposition Hands   │
+                                                │ According to Extracted Time  │
+                                                └──────────────┬───────────────┘
+                                                              ▼
+                                                ┌──────────────────────────────┐
+                                                │ Reconstructed Analog Clock   │
+                                                │ Image                        │
+                                                └──────────────────────────────┘
+
+```
+```mermaid 
+
+graph TD
+    subgraph Input_Processing [Stage 1: Digital Time Extraction]
+        A[Digital Clock Image] --> B[Time Region Detection Model<br/>Bounding Box Localization]
+        B --> C[Digit Recognition Model<br/>OCR / Classification]
+        C --> D[Extracted Time HH:MM]
+    end
+
+    D --> E{Processing Mode}
+
+    subgraph Path_1 [Path 1: Generative cGAN]
+        E -->|Generate New| F[Generate Minimal<br/>Analog Sketch]
+        F --> G[cGAN Model<br/>Img-to-Img Translation]
+        G --> H[Adjusted Analog<br/>Clock Image]
+    end
+
+    subgraph Path_2 [Path 2: Hand Editing Pipeline]
+        E -->|Edit Existing| I[Analog Clock Image<br/>Input]
+        I --> J[Hand Detection Model]
+        J --> K[Hand Removal Model<br/>Inpainting]
+        K --> L[Reposition Hands<br/>Logic: Extracted Time]
+        L --> M[Reconstructed Analog<br/>Clock Image]
+    end
+
+    style Input_Processing fill:#f9f9f9,stroke:#333,stroke-width:2px
+    style Path_1 fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
+    style Path_2 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+
+```
+---
 
 ## 🛠️ Tech Stack
 
