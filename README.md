@@ -140,36 +140,6 @@ PATH 1: Analog Generation & Alignment           PATH 2: Hand Editing Pipeline
                                                 └──────────────────────────────┘
 
 ```
-```mermaid 
-
-graph TD
-    subgraph Input_Processing [Stage 1: Digital Time Extraction]
-        A[Digital Clock Image] --> B[Time Region Detection Model<br/>Bounding Box Localization]
-        B --> C[Digit Recognition Model<br/>OCR / Classification]
-        C --> D[Extracted Time HH:MM]
-    end
-
-    D --> E{Processing Mode}
-
-    subgraph Path_1 [Path 1: Generative cGAN]
-        E -->|Generate New| F[Generate Minimal<br/>Analog Sketch]
-        F --> G[cGAN Model<br/>Img-to-Img Translation]
-        G --> H[Adjusted Analog<br/>Clock Image]
-    end
-
-    subgraph Path_2 [Path 2: Hand Editing Pipeline]
-        E -->|Edit Existing| I[Analog Clock Image<br/>Input]
-        I --> J[Hand Detection Model]
-        J --> K[Hand Removal Model<br/>Inpainting]
-        K --> L[Reposition Hands<br/>Logic: Extracted Time]
-        L --> M[Reconstructed Analog<br/>Clock Image]
-    end
-
-    style Input_Processing fill:#f9f9f9,stroke:#333,stroke-width:2px
-    style Path_1 fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
-    style Path_2 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
-
-```
 ---
 
 ## 🛠️ Tech Stack
