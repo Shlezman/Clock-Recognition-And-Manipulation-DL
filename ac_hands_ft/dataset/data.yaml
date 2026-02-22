@@ -1,0 +1,9 @@
+path: C:\Users\danie\Desktop\DS\Degree\projects\Advanced_topics_in_DS\Clock-Recognition-And-Manipulation-DL\ac_hands_ft\dataset
+train: images/train
+val: images/val
+test: images/test
+nc: 3
+names:
+- hour_hand
+- minute_hand
+- second_hand
