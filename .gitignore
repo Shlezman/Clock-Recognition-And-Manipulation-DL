@@ -11,6 +11,8 @@ ROADMAPS.md
 *.so
 data/
 ignore/
+analog_clock/data/from_internet_cropped/
+analog_clock/data/from_internet_cropped_smoketest/
 
 # Distribution / packaging
 .Python
