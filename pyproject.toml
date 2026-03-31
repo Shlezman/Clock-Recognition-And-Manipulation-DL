@@ -1,0 +1,56 @@
+[project]
+name = "clock-recognition-and-manipulation"
+version = "0.1.0"
+description = "End-to-end DL pipeline: digital time recognition to generative analog clock manipulation"
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    # Deep learning
+    "torch",
+    "torchvision",
+    "ultralytics",
+
+    # Image processing
+    "opencv-python",
+    "opencv-contrib-python",
+    "Pillow",
+    "albumentations>=1.4.15",
+    "scikit-image",
+    "imageio",
+
+    # Data & science
+    "numpy",
+    "scipy",
+    "pandas",
+    "scikit-learn",
+    "matplotlib",
+    "seaborn",
+    "h5py",
+
+    # Utilities
+    "tqdm",
+    "requests",
+    "PyYAML",
+
+    # Dataset access
+    "datasets",
+    "kagglehub",
+    "kaggle",
+
+    # Notebook support
+    "jupyter",
+    "ipykernel",
+]
+
+[project.optional-dependencies]
+tagging = [
+    "PyQt5>=5.15.0",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.2.0",
+    "pytest",
+    "ruff",
+]
