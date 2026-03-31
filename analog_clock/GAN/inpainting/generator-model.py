@@ -12,7 +12,7 @@ import numpy as np
 
 # --- Generator (U-Net) ---
 class InpaintGenerator(nn.Module):
-    def __init__(self, in_channels=4, out_channels=3): # 4 ערוצים בכניסה!
+    def __init__(self, in_channels=4, out_channels=3): # 4 input channels (image + mask)
         super(InpaintGenerator, self).__init__()
 
         def down_block(in_feat, out_feat, normalize=True):

@@ -44,7 +44,7 @@ class UNetUp(nn.Module):
         return x
 
 class GeneratorUNet(nn.Module):
-    def __init__(self, in_channels=6, out_channels=3): # שינוי ל-6 ערוצים בכניסה
+    def __init__(self, in_channels=6, out_channels=3): # 6 input channels (image + sketch)
         super(GeneratorUNet, self).__init__()
 
         self.down1 = UNetDown(in_channels, 64, normalize=False)
@@ -68,7 +68,7 @@ class GeneratorUNet(nn.Module):
             nn.Upsample(scale_factor=2),
             nn.ZeroPad2d((1, 0, 1, 0)),
             nn.Conv2d(128, out_channels, 4, padding=1),
-            nn.Tanh(), # פלט בטווח [-1, 1]
+            nn.Tanh(), # Output in range [-1, 1]
         )
 
     def forward(self, x):
