@@ -41,6 +41,7 @@ dependencies = [
     # Notebook support
     "jupyter",
     "ipykernel",
+    "nbconvert",
 ]
 
 [project.optional-dependencies]
