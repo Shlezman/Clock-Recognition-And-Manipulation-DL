@@ -32,6 +32,7 @@ dependencies = [
     "tqdm",
     "requests",
     "PyYAML",
+    "psutil",
 
     # Dataset access
     "datasets",
@@ -42,12 +43,23 @@ dependencies = [
     "jupyter",
     "ipykernel",
     "nbconvert",
+
+    # Monitoring
+    "tensorboard",
 ]
 
 [project.optional-dependencies]
 tagging = [
     "PyQt5>=5.15.0",
 ]
+
+# NOTE — CUDA PyTorch:
+# The default `torch` from PyPI is CPU-only.
+# For NVIDIA GPU training, install the CUDA build:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+# Or with uv:
+#   uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+# The retrain_and_evaluate.sh script handles this automatically.
 
 [dependency-groups]
 dev = [
