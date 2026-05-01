@@ -12,6 +12,7 @@ kaggle
 seaborn~=0.12.2
 torch
 torchvision
+timm>=1.0.0
 scikit-learn
 matplotlib~=3.8.0
 pillow>=10.0.0

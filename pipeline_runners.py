@@ -9,6 +9,7 @@ Stages:
   1. Digital time recognition  (YOLO digit boxes + SVHN-style CNN)
   2. Sketch-cGAN clock manipulation
   3. Mask-guided inpainting clock manipulation
+  4. ViT-based clock generation (pretrained ViT encoder + time-conditioned decoder)
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ from analog_clock.pipeline_utils import (
     time_to_degrees_cw,
 )
 from digital_clock.svhn_digit_recognition_cnn.svhn_cnn_model import SVHNModel
+from analog_clock.vit_clock_gen.model import ViTClockGenerator
 
 
 def _to_inference(module: torch.nn.Module) -> torch.nn.Module:
@@ -419,5 +421,82 @@ def show_inpainting(result: InpaintResult) -> None:
         cmap = "gray" if title == "Detected Hands" else None
         axis.imshow(img, cmap=cmap)
         axis.set_title(title); axis.axis("off")
+    plt.tight_layout()
+    plt.show()
+
+
+# ============================================================================
+# Stage 5 — ViT Clock Generation
+# ============================================================================
+
+import torchvision.transforms as _vit_tf
+
+
+_VIT_TRANSFORM = _vit_tf.Compose([
+    _vit_tf.Resize((224, 224)),
+    _vit_tf.ToTensor(),
+    _vit_tf.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+])
+
+
+@dataclass
+class ViTResult:
+    original: Image.Image
+    generated: Image.Image
+    target_hh: int
+    target_mm: int
+    weights_found: bool = True
+
+
+def load_vit_models(
+    weights_path: str,
+    device: torch.device,
+    vit_name: str = "vit_small_patch16_224",
+) -> ViTClockGenerator | None:
+    """Load trained ViTClockGenerator weights.
+
+    Returns None if the weights file does not exist so the notebook can
+    display a helpful message instead of crashing.
+    """
+    from pathlib import Path as _Path
+    if not _Path(weights_path).exists():
+        return None
+    ckpt = torch.load(weights_path, map_location=device, weights_only=False)
+    saved_vit = ckpt.get("vit_name", vit_name)
+    model = ViTClockGenerator(vit_name=saved_vit, pretrained=False).to(device)
+    model.load_state_dict(ckpt["model_state_dict"])
+    model.train(False)
+    return model
+
+
+def run_vit_generation(
+    image_path: str,
+    target_hh: int,
+    target_mm: int,
+    model: ViTClockGenerator,
+    device: torch.device,
+) -> ViTResult:
+    """Generate a clock image showing *target_hh*:*target_mm* via the ViT model."""
+    original = Image.open(image_path).convert("RGB")
+    src_tensor = _VIT_TRANSFORM(original).unsqueeze(0).to(device)
+    hh_t = torch.tensor([target_hh], dtype=torch.long, device=device)
+    mm_t = torch.tensor([target_mm], dtype=torch.long, device=device)
+
+    with torch.no_grad():
+        out = model(src_tensor, hh_t, mm_t)
+
+    arr = out.squeeze(0).cpu().permute(1, 2, 0).numpy()
+    arr = (arr * 0.5 + 0.5).clip(0, 1)
+    generated = Image.fromarray((arr * 255).astype(np.uint8))
+    return ViTResult(original=original, generated=generated, target_hh=target_hh, target_mm=target_mm)
+
+
+def show_vit_generation(result: ViTResult) -> None:
+    fig, ax = plt.subplots(1, 2, figsize=(10, 5.5))
+    ax[0].imshow(result.original.resize((224, 224)))
+    ax[0].set_title("Original Analog Clock"); ax[0].axis("off")
+    ax[1].imshow(result.generated)
+    ax[1].set_title(f"ViT Generated  {result.target_hh}:{result.target_mm:02d}")
+    ax[1].axis("off")
     plt.tight_layout()
     plt.show()

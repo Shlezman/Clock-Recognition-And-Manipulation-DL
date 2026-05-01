@@ -57,6 +57,20 @@ This approach uses a Conditional GAN to "redraw" the clock based on a structural
    * **Output:** A newly generated, photorealistic image of the clock, where the hands are aligned according to the sketch.
 3. **GIF Animation:** Generates an animated GIF showing the clock hands smoothly transitioning from the original time to the target time, with 2-minute intermediate steps.
 
+### Mode 3: Vision Transformer Generation (ViT-Based)
+
+This approach uses a pretrained Vision Transformer to directly generate the clock at the target time.
+
+1. **ViT Encoder:** `vit_small_patch16_224` (pretrained on ImageNet) encodes the source clock image into 196 spatial patch tokens (14×14 grid).
+2. **Time Conditioning:** The target `(HH, MM)` is encoded as two sinusoidal embeddings (12-hour and 60-minute cycles) projected to a 256-dim vector. Each decoder block receives an AdaIN scale/shift derived from this vector.
+3. **Progressive Decoder:** Four `ConvTranspose2d` blocks upsample the patch feature map from 14×14 → 224×224, injecting time conditioning at every scale.
+4. **Training:** L1 pixel loss + VGG16 perceptual loss (relu_1_2 / relu_2_2 / relu_3_3), trained with AdamW + CosineAnnealingLR.
+5. **Weights:** Saved to `analog_clock/vit_clock_gen/weights/vit_clock_gen_best.pth`.
+
+> **See [`analog_clock/vit_clock_gen/README.md`](analog_clock/vit_clock_gen/README.md) for the step-by-step training guide.**
+
+---
+
 ### Mode 2: Segmentation & Inpainting (High-Fidelity)
 
 This approach uses a "disassemble and reassemble" method to preserve the original background quality.
@@ -104,10 +118,10 @@ This approach uses a "disassemble and reassemble" method to preserve the origina
                     | Extracted Time HH:MM |
                     +-----------+----------+
                                 |
-               +----------------+-------------- Y-SPLIT ----------------+
-               v                                                        v
+               +----------------+--------- Y-SPLIT (3 paths) ----------+
+               v                              v                         v
 
-PATH 1: Sketch-Guided Generation               PATH 2: Segmentation & Inpainting
+PATH 1: Sketch-Guided Generation    PATH 2: Segmentation & Inpainting   PATH 3: ViT Generation
 
 +------------------------------------+        +------------------------------+
 | Time Recognition CNN               |        | Analog Clock Image (Input)   |
@@ -142,6 +156,32 @@ PATH 1: Sketch-Guided Generation               PATH 2: Segmentation & Inpainting
                                               | Animated GIF                 |
                                               | (Original -> Target time)    |
                                               +------------------------------+
+
+PATH 3: ViT-Based Generation
+
++------------------------------------------+
+| Source Analog Clock (224x224)            |
++-----------+------------------------------+
+            |
+            v
++------------------------------------------+
+| ViT-Small/16 Encoder                     |
+| (pretrained ImageNet) → 196 patch tokens |
++-----------+------------------------------+
+            |
+            v
++------------------------------------------+
+| Progressive CNN Decoder (4 blocks)       |
+| 14→28→56→112→224                         |
+| + AdaIN time conditioning at each block  |
++-----------+------------------------------+
+            |  ↑ sinusoidal(HH) ‖ sinusoidal(MM)
+            |  target time embedding
+            v
++------------------------------------------+
+| Generated Clock Image (224x224)          |
+| at target HH:MM                          |
++------------------------------------------+
 ```
 
 ---
@@ -191,13 +231,19 @@ The project utilizes a hybrid of public benchmarks and custom synthetic data:
     |   +-- dataset_generator.py           # Synthetic mask generator
     |   +-- train.py                       # Training script
     +-- GAN/
-        +-- retrain.py                     # Full retraining script (datagen + train + eval)
-        +-- sketch/                        # Sketch-guided cGAN (Pix2Pix)
-        |   +-- generator_model.py         # GeneratorUNet + SketchDiscriminator (spectral norm)
-        |   +-- dataset_generator/         # Sketch dataset generator (uses shared module)
-        +-- inpainting/                    # Inpainting GAN
-            +-- generator_model.py         # InpaintGenerator + InpaintDiscriminator (spectral norm)
-            +-- dataset_generator/         # Inpainting dataset generator (uses shared module)
+    |   +-- retrain.py                     # Full retraining script (datagen + train + eval)
+    |   +-- sketch/                        # Sketch-guided cGAN (Pix2Pix)
+    |   |   +-- generator_model.py         # GeneratorUNet + SketchDiscriminator (spectral norm)
+    |   |   +-- dataset_generator/         # Sketch dataset generator (uses shared module)
+    |   +-- inpainting/                    # Inpainting GAN
+    |       +-- generator_model.py         # InpaintGenerator + InpaintDiscriminator (spectral norm)
+    |       +-- dataset_generator/         # Inpainting dataset generator (uses shared module)
+    +-- vit_clock_gen/                     # ViT-based clock generation (Stage 5)
+        +-- model.py                       # ViTClockGenerator + VGGPerceptualLoss
+        +-- dataset_generator.py           # Paired (source, target) dataset generator
+        +-- train.py                       # End-to-end training script
+        +-- weights/                       # Trained checkpoint directory
+        +-- README.md                      # Step-by-step training guide
 ```
 
 ---
@@ -264,7 +310,32 @@ python digital_clock/yolo_detect_hh_mm/dataset_creator/dataset_generator.py
 python analog_clock/GAN/sketch/dataset_generator/dataset_generator.py
 python analog_clock/GAN/inpainting/dataset_generator/dataset_generator.py
 python analog_clock/time_recognition_cnn/dataset_generator.py --n_samples 20000
+
+# ViT clock generation dataset
+python analog_clock/vit_clock_gen/dataset_generator.py --n_samples 20000
 ```
+
+### Training the ViT Clock Generator (Stage 5)
+
+Pull the branch on a GPU machine, then run these three commands — no manual wiring needed:
+
+```bash
+# 1. Install dependencies (CUDA build recommended for training)
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+pip install -e .          # installs timm and all other deps from pyproject.toml
+
+# 2. Generate dataset (~10 min on CPU, produces dataset/vit_clock_gen/)
+python analog_clock/vit_clock_gen/dataset_generator.py --n_samples 20000
+
+# 3. Train (50 epochs, ~2–4 h on a single A100/RTX 3090)
+python analog_clock/vit_clock_gen/train.py --epochs 50 --batch_size 8
+
+# 4. Open the full pipeline notebook — Stage 5 loads weights automatically
+jupyter notebook full-pipeline.ipynb
+```
+
+Best checkpoint is saved to `analog_clock/vit_clock_gen/weights/vit_clock_gen_best.pth`.  
+See [`analog_clock/vit_clock_gen/README.md`](analog_clock/vit_clock_gen/README.md) for all training options.
 
 ---
 
@@ -306,6 +377,7 @@ The procedural clock generator produces realistic training data with:
 * **Package Manager:** uv
 * **Deep Learning Framework:** PyTorch
 * **Detection & Segmentation:** Ultralytics YOLOv8
+* **Vision Transformers:** timm (`vit_small_patch16_224`, fine-tuned)
 * **Image Processing:** OpenCV, PIL, Albumentations
 * **Testing:** pytest (42 tests)
 * **Visualization:** Matplotlib, NumPy

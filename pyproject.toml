@@ -9,6 +9,7 @@ dependencies = [
     # Deep learning
     "torch",
     "torchvision",
+    "timm>=1.0.0",
     "ultralytics",
 
     # Image processing
