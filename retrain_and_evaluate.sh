@@ -11,6 +11,7 @@
 #   ./retrain_and_evaluate.sh --quick          # smoke-test (500 samples, 10 epochs)
 #   ./retrain_and_evaluate.sh --skip-install   # skip environment setup
 #   ./retrain_and_evaluate.sh --skip-cnn       # skip time-recognition CNN training
+#   ./retrain_and_evaluate.sh --skip-lfs       # skip Git LFS pull (already pulled)
 #   ./retrain_and_evaluate.sh --device cuda    # force CUDA device
 #   ./retrain_and_evaluate.sh --batch-size 16  # larger batch for big GPUs
 #
@@ -30,6 +31,7 @@ CNN_EPOCHS=60
 CNN_SAMPLES=20000
 SKIP_INSTALL=false
 SKIP_CNN=false
+SKIP_LFS=false
 QUICK=false
 DATA_DIR="./dataset"
 OUTPUT_DIR="./output"
@@ -43,6 +45,7 @@ while [[ $# -gt 0 ]]; do
         --quick)        QUICK=true; shift ;;
         --skip-install) SKIP_INSTALL=true; shift ;;
         --skip-cnn)     SKIP_CNN=true; shift ;;
+        --skip-lfs)     SKIP_LFS=true; shift ;;
         --samples)      SAMPLES="$2"; shift 2 ;;
         --epochs)       EPOCHS="$2"; shift 2 ;;
         --batch-size)   BATCH_SIZE="$2"; shift 2 ;;
@@ -118,7 +121,7 @@ run_jupyter() {
 step_gpu_preflight() {
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  Step 0/6: GPU Pre-flight Check"
+    echo "  Step 0/7: GPU Pre-flight Check"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
     # Check nvidia-smi
@@ -203,12 +206,99 @@ step_gpu_preflight() {
 }
 
 # ============================================================================
-# Step 1: Environment Setup
+# Step 1: Git LFS Setup
+# ============================================================================
+step_lfs() {
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Step 1/7: Git LFS Setup (pull pretrained .pth weights)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    if $SKIP_LFS; then
+        echo "⏭  Skipping LFS pull (--skip-lfs)"
+        return
+    fi
+
+    # Skip if not a git repo
+    if [[ ! -d .git ]]; then
+        echo "ℹ️  Not a git repository — skipping LFS pull"
+        return
+    fi
+
+    # Skip if there's no LFS-tracked content
+    if ! grep -q "filter=lfs" .gitattributes 2>/dev/null; then
+        echo "ℹ️  No LFS-tracked files in .gitattributes — skipping"
+        return
+    fi
+
+    # Install git-lfs if missing
+    if ! command -v git-lfs &>/dev/null; then
+        echo "📦 git-lfs not found — attempting to install..."
+        # Pick `sudo` only if available; root-in-container has neither sudo nor needs it
+        SUDO=""
+        if [[ $EUID -ne 0 ]] && command -v sudo &>/dev/null; then
+            SUDO="sudo"
+        fi
+        if command -v apt-get &>/dev/null; then
+            $SUDO apt-get update -qq && $SUDO apt-get install -y git-lfs
+        elif command -v dnf &>/dev/null; then
+            $SUDO dnf install -y git-lfs
+        elif command -v yum &>/dev/null; then
+            $SUDO yum install -y git-lfs
+        elif command -v brew &>/dev/null; then
+            brew install git-lfs
+        elif command -v apk &>/dev/null; then
+            $SUDO apk add --no-cache git-lfs
+        else
+            echo "❌ ERROR: Could not auto-install git-lfs. Install manually:"
+            echo "     https://git-lfs.com/  →  then re-run this script"
+            echo "   Or pass --skip-lfs if weights are already in place."
+            exit 1
+        fi
+        if ! command -v git-lfs &>/dev/null; then
+            echo "❌ ERROR: git-lfs install attempted but binary still not on PATH."
+            echo "   Check the install output above. Try installing manually:"
+            echo "     https://git-lfs.com/"
+            exit 1
+        fi
+    fi
+
+    # Initialise LFS hooks for this user (idempotent)
+    git lfs install --skip-repo >/dev/null 2>&1 || git lfs install >/dev/null
+
+    # Pull the actual binary content
+    echo "⬇️  Running git lfs pull..."
+    if ! git lfs pull; then
+        echo "⚠️  git lfs pull failed. The .pth files may still be pointer stubs."
+        echo "   If you have credentials issues, try: git lfs fetch --all"
+        return
+    fi
+
+    # Verify a critical .pth file is a real binary, not a pointer (~130 bytes)
+    SAMPLE_WEIGHTS="digital_clock/svhn_digit_recognition_cnn/svhn_cnn.pth"
+    if [[ -f "$SAMPLE_WEIGHTS" ]]; then
+        SIZE=$(wc -c < "$SAMPLE_WEIGHTS" | tr -d ' ')
+        if (( SIZE < 10000 )); then
+            echo "❌ ERROR: $SAMPLE_WEIGHTS is only ${SIZE} bytes — looks like an LFS pointer."
+            echo "   First bytes:"
+            head -c 200 "$SAMPLE_WEIGHTS"
+            echo ""
+            echo "   Check authentication: git lfs env"
+            exit 1
+        fi
+        echo "✅ LFS files pulled (sample: ${SAMPLE_WEIGHTS} = $(du -h "$SAMPLE_WEIGHTS" | cut -f1))"
+    else
+        echo "⚠️  ${SAMPLE_WEIGHTS} not found — skipping size check"
+    fi
+}
+
+# ============================================================================
+# Step 2: Environment Setup
 # ============================================================================
 step_env() {
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  Step 1/6: Environment Setup"
+    echo "  Step 2/7: Environment Setup"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
     if $SKIP_INSTALL; then
@@ -280,12 +370,12 @@ elif not torch.cuda.is_available() and '$NEED_CUDA_TORCH' == 'true':
 }
 
 # ============================================================================
-# Step 2: Retrain Sketch-cGAN
+# Step 3: Retrain Sketch-cGAN
 # ============================================================================
 step_sketch() {
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  Step 2/6: Retrain Sketch-cGAN  (${SAMPLES} samples, ${EPOCHS} epochs)"
+    echo "  Step 3/7: Retrain Sketch-cGAN  (${SAMPLES} samples, ${EPOCHS} epochs)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
     DEVICE_FLAG=""
@@ -311,12 +401,12 @@ step_sketch() {
 }
 
 # ============================================================================
-# Step 3: Retrain Inpainting GAN
+# Step 4: Retrain Inpainting GAN
 # ============================================================================
 step_inpainting() {
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  Step 3/6: Retrain Inpainting GAN  (${SAMPLES} samples, ${EPOCHS} epochs)"
+    echo "  Step 4/7: Retrain Inpainting GAN  (${SAMPLES} samples, ${EPOCHS} epochs)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
     DEVICE_FLAG=""
@@ -342,12 +432,12 @@ step_inpainting() {
 }
 
 # ============================================================================
-# Step 4: Retrain Time-Recognition CNN  (optional)
+# Step 5: Retrain Time-Recognition CNN  (optional)
 # ============================================================================
 step_cnn() {
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  Step 4/6: Retrain Time-Recognition CNN"
+    echo "  Step 5/7: Retrain Time-Recognition CNN"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
     if $SKIP_CNN; then
@@ -377,12 +467,12 @@ step_cnn() {
 }
 
 # ============================================================================
-# Step 5: Execute Full Pipeline Notebook
+# Step 6: Execute Full Pipeline Notebook
 # ============================================================================
 step_notebook() {
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  Step 5/6: Execute full-pipeline.ipynb"
+    echo "  Step 6/7: Execute full-pipeline.ipynb"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
     mkdir -p "$OUTPUT_DIR"
@@ -410,7 +500,7 @@ step_notebook() {
 }
 
 # ============================================================================
-# Step 6: Summary
+# Step 7: Summary
 # ============================================================================
 step_summary() {
     echo ""
@@ -453,6 +543,7 @@ step_summary() {
 SECONDS=0
 
 step_gpu_preflight
+step_lfs
 step_env
 step_sketch
 step_inpainting
