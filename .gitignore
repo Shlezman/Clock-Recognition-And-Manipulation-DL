@@ -2,9 +2,17 @@
 __pycache__/
 *.py[codz]
 *$py.class
-
+.idea/
+yolo_dataset/
+fine_tuning_set/
+ROADMAPS.md
+.DS_Store
 # C extensions
 *.so
+data/
+ignore/
+analog_clock/data/from_internet_cropped/
+analog_clock/data/from_internet_cropped_smoketest/
 
 # Distribution / packaging
 .Python
