@@ -75,6 +75,8 @@ class ClockPairDataset(Dataset):
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         fname, tgt_hh, tgt_mm = self.records[idx]
+        # pandas reads numeric filenames as integers — re-pad to 6-digit string
+        fname = f"{int(fname):06d}"
         src = self.transform(Image.open(self.src_dir / f"{fname}.png").convert("RGB"))
         tgt = self.transform(Image.open(self.tgt_dir / f"{fname}.png").convert("RGB"))
         return src, tgt, torch.tensor(int(tgt_hh), dtype=torch.long), torch.tensor(int(tgt_mm), dtype=torch.long)
