@@ -54,13 +54,22 @@ tagging = [
     "PyQt5>=5.15.0",
 ]
 
-# NOTE — CUDA PyTorch:
-# The default `torch` from PyPI is CPU-only.
-# For NVIDIA GPU training, install the CUDA build:
-#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
-# Or with uv:
-#   uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
-# The retrain_and_evaluate.sh script handles this automatically.
+# ── CUDA PyTorch (uv source override) ────────────────────────────────────────
+# On Linux (GPU training machines) uv pulls torch/torchvision from the PyTorch
+# CUDA 12.1 index so that `uv sync` / `uv run` never silently revert to the
+# CPU-only wheels from PyPI.  Mac (Darwin) keeps the default PyPI wheels.
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cu121", marker = "sys_platform == 'linux'" },
+]
+torchvision = [
+    { index = "pytorch-cu121", marker = "sys_platform == 'linux'" },
+]
+
+[[tool.uv.indexes]]
+name = "pytorch-cu121"
+url  = "https://download.pytorch.org/whl/cu121"
+explicit = true
 
 [dependency-groups]
 dev = [
