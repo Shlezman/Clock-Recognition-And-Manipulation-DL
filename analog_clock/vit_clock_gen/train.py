@@ -262,7 +262,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--lr",           type=float, default=2e-4,  help="Peak learning rate (default: 2e-4)")
     p.add_argument("--lambda_perc",  type=float, default=0.1,   help="Perceptual loss weight (default: 0.1)")
     p.add_argument("--save_every",   type=int,   default=10,    help="Save checkpoint every N epochs")
-    p.add_argument("--workers",      type=int,   default=4,     help="DataLoader worker processes")
+    p.add_argument("--workers",      type=int,   default=0,     help="DataLoader worker processes (0=in-process, safe in Docker)")
     p.add_argument("--resume",       default=None,              help="Path to checkpoint to resume from")
     return p.parse_args()
 
