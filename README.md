@@ -321,7 +321,7 @@ Pull the branch on a GPU machine, then run these three commands — no manual wi
 
 ```bash
 # 1. Install dependencies (CUDA build recommended for training)
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 pip install -e .          # installs timm and all other deps from pyproject.toml
 
 # 2. Generate dataset (~10 min on CPU, produces dataset/vit_clock_gen/)

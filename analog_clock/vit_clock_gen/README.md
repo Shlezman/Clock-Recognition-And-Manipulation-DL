@@ -57,7 +57,7 @@ cd Clock-Recognition-And-Manipulation-DL
 pip install -e .
 
 # CUDA GPU (recommended for training)
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 pip install -e .
 ```
 
