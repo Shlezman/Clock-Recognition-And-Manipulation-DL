@@ -66,7 +66,7 @@ torchvision = [
     { index = "pytorch-cu121", marker = "sys_platform == 'linux'" },
 ]
 
-[[tool.uv.indexes]]
+[[tool.uv.index]]
 name = "pytorch-cu121"
 url  = "https://download.pytorch.org/whl/cu121"
 explicit = true
