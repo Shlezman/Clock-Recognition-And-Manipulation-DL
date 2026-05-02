@@ -324,16 +324,16 @@ step_env() {
         uv sync
 
         if $NEED_CUDA_TORCH; then
-            echo "🔧 Installing CUDA PyTorch (cu124)..."
-            uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+            echo "🔧 Installing CUDA PyTorch (cu121)..."
+            uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
         fi
     else
         echo "📦 uv not found — falling back to pip..."
         python3 -m pip install --upgrade pip
 
         if $NEED_CUDA_TORCH; then
-            echo "🔧 Installing CUDA PyTorch (cu124)..."
-            python3 -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+            echo "🔧 Installing CUDA PyTorch (cu121)..."
+            python3 -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
         fi
 
         python3 -m pip install -e ".[dev]"
