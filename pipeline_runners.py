@@ -25,7 +25,6 @@ from analog_clock.analog_sketch_creator import draw_analog_clock
 from analog_clock.GAN.inpainting.generator_model import InpaintGenerator
 from analog_clock.GAN.sketch.generator_model import GeneratorUNet
 from analog_clock.pipeline_utils import (
-    find_clock_center,
     generate_inpainting_gif,
     generate_sketch_cgan_gif,
     get_angle_clockwise_from_12,
@@ -35,6 +34,73 @@ from analog_clock.pipeline_utils import (
     time_to_degrees_cw,
 )
 from digital_clock.svhn_digit_recognition_cnn.svhn_cnn_model import SVHNModel
+
+
+# ── center-finding (preserved exactly from original notebook) ────────────────
+# pipeline_utils._find_center_hough uses minRadius=h*0.10 / maxRadius=h*0.90,
+# which is too loose for clock faces and produces wrong centres.
+# These functions use the original tight window (35-55 % of height).
+
+def _pca_line(mask: np.ndarray):
+    """Return (centre_point, direction_vector) via PCA, or (None, None)."""
+    y_idx, x_idx = np.where(mask > 0)
+    if len(x_idx) == 0:
+        return None, None
+    pts = np.column_stack([x_idx.astype(np.float64), y_idx.astype(np.float64)])
+    mean, vecs = cv2.PCACompute(pts, mean=None)
+    return (mean[0, 0], mean[0, 1]), (vecs[0, 0], vecs[0, 1])
+
+
+def _pca_intersect(line1, line2):
+    """Intersection of two (point, vector) lines; returns None for parallel."""
+    if line1[0] is None or line2[0] is None:
+        return None
+    p1, v1 = line1
+    p2, v2 = line2
+    A = np.array([[v1[0], -v2[0]], [v1[1], -v2[1]]])
+    b = np.array([p2[0] - p1[0], p2[1] - p1[1]])
+    try:
+        t = np.linalg.solve(A, b)[0]
+        return (int(p1[0] + t * v1[0]), int(p1[1] + t * v1[1]))
+    except np.linalg.LinAlgError:
+        return None
+
+
+def _find_clock_center(img_rgb: np.ndarray, mask_h: np.ndarray,
+                       mask_m: np.ndarray, mask_s: np.ndarray) -> tuple:
+    """
+    Hybrid centre finder identical to the original notebook's find_best_center_hybrid.
+    Uses Hough with clock-specific radius bounds (35–55 % of height), then falls
+    back to PCA intersection of the three hand masks.
+    """
+    h, w = img_rgb.shape[:2]
+    geo = np.array([w / 2, h / 2])
+
+    # 1. Hough Circles with tight clock-face radius window
+    gray = cv2.medianBlur(cv2.cvtColor(img_rgb, cv2.COLOR_RGB2GRAY), 7)
+    circles = cv2.HoughCircles(
+        gray, cv2.HOUGH_GRADIENT, 1, h / 4,
+        param1=100, param2=35,
+        minRadius=int(h * 0.35), maxRadius=int(h * 0.55),
+    )
+    hough = None
+    if circles is not None:
+        for c in np.uint16(np.around(circles))[0]:
+            d = np.linalg.norm(np.array([c[0], c[1]], float) - geo)
+            if d < w * 0.15 and (hough is None or d < np.linalg.norm(np.array(hough, float) - geo)):
+                hough = (int(c[0]), int(c[1]))
+
+    # 2. PCA intersection of all three hand lines
+    line_h = _pca_line(mask_h)
+    line_m = _pca_line(mask_m)
+    line_s = _pca_line(mask_s)
+    pts = [_pca_intersect(a, b) for a, b in [(line_h, line_m), (line_m, line_s), (line_s, line_h)]]
+    valid = [p for p in pts if p and np.linalg.norm(np.array(p, float) - geo) < w * 0.2]
+    pca = (int(np.mean([p[0] for p in valid])), int(np.mean([p[1] for p in valid]))) if valid else None
+
+    if hough and pca and np.linalg.norm(np.array(hough, float) - np.array(pca, float)) < w * 0.05:
+        return (hough[0] + pca[0]) // 2, (hough[1] + pca[1]) // 2
+    return hough or pca or (w // 2, h // 2)
 
 
 # ── shared transforms ────────────────────────────────────────────────────────
@@ -261,7 +327,9 @@ def run_inpainting(img_path: str, hh: int, mm: int, igan, yolo_hands, device: to
             out = np.maximum(out, m)
         return out
 
-    mask_h, mask_m = _best(dets_h), _best(dets_m)
+    mask_h = _best(dets_h)
+    mask_m = _best(dets_m)
+    mask_s = _best(dets_s)
     full_bin        = (_union(dets_h + dets_m) > 0.5).astype(np.float32)
     dilated_cgan    = cv2.dilate(full_bin, np.ones((7,  7),  np.uint8), iterations=1)
     dilated_inpaint = cv2.dilate(full_bin, np.ones((11, 11), np.uint8), iterations=1)
@@ -280,8 +348,8 @@ def run_inpainting(img_path: str, hh: int, mm: int, igan, yolo_hands, device: to
         clean_cgan, (dilated_inpaint * 255).astype(np.uint8), 3, cv2.INPAINT_TELEA
     )
 
-    # Center + angles
-    center  = find_clock_center(img_cv, mask_h, mask_m)
+    # Center + angles — uses original notebook's tight Hough radius window
+    center  = _find_clock_center(img_cv, mask_h, mask_m, mask_s)
     angle_h = get_angle_clockwise_from_12(mask_h, center)
     angle_m = get_angle_clockwise_from_12(mask_m, center)
 
